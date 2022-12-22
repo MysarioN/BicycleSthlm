@@ -3,20 +3,28 @@ package kth.init.bicyclesthlm;
 import static android.content.ContentValues.TAG;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
+import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.content.DialogInterface;
 import android.content.pm.PackageManager;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.ShapeDrawable;
 import android.location.Location;
 import android.location.LocationListener;
-import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
 
-import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -26,16 +34,13 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.snackbar.Snackbar;
 
 import kth.init.bicyclesthlm.databinding.ActivityMapsBinding;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback ,
-        LocationListener{
-
-    private static final String[] INITIAL_PERMS={
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-    };
+//Parts of this class is taken from developer.google.com
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
 
     private static final int REQUEST_ACCESS_LOCATION = 1000;
 
@@ -59,6 +64,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mapFragment.getMapAsync(this);
 
 
+        ImageButton button = findViewById(R.id.layers_button);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                showMapTypeDialog();
+            }
+        });
+
     }
 
     @Override
@@ -79,23 +92,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    /**
-     * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we just add a marker near Sydney, Australia.
-     * If Google Play services is not installed on the device, the user will be prompted to install
-     * it inside the SupportMapFragment. This method will only be triggered once the user has
-     * installed Google Play services and returned to the app.
-     */
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
         getDeviceLocation();
 
-        if(mLastLocation != null)
-            mMap.moveCamera(CameraUpdateFactory.newLatLng(new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude())));
+        if (mLastLocation != null)
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()), 5));
+        else
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 5));
     }
 
     @Override
@@ -116,6 +122,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         updateLocationUI();
     }
 
+    @SuppressLint("MissingPermission")
     private void updateLocationUI() {
         if (mMap == null) {
             return;
@@ -130,7 +137,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 mLastLocation = null;
                 initPerms();
             }
-        } catch (SecurityException e)  {
+        } catch (SecurityException e) {
             Log.e("Exception: %s", e.getMessage());
         }
     }
@@ -143,7 +150,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         try {
             if (locationPermissionGranted) {
-                Task<Location> locationResult = fusedLocationProviderClient.getLastLocation();
+                @SuppressLint("MissingPermission") Task<Location> locationResult = fusedLocationProviderClient.getLastLocation();
                 locationResult.addOnCompleteListener(this, new OnCompleteListener<Location>() {
                     @Override
                     public void onComplete(@NonNull Task<Location> task) {
@@ -170,13 +177,41 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    @Override
-    public void onLocationChanged(@NonNull Location location) {
-        mLastLocation = location;
+    public void showMapTypeDialog() {
+        AlertDialog dialog = new AlertDialog.Builder(MapsActivity.this)
+                .setTitle("Results")
+                .setMessage("Map types:")
+                .setPositiveButton("Standard", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+                    }
+                })
+                .setNeutralButton("Satellite", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
+                    }
+                })
+                .setCancelable(true)
+                .show();
 
-        LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
-        mMap.animateCamera(CameraUpdateFactory.zoomTo(11));
-        mMap.addMarker(new MarkerOptions().position(latLng));
+        Button standardMapButton = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+        Button satelliteMapButton = dialog.getButton(DialogInterface.BUTTON_NEUTRAL);
+
+        Drawable standardIcon = AppCompatResources.getDrawable(MapsActivity.this, R.drawable.standard_map);
+        Drawable satelliteIcon = AppCompatResources.getDrawable(MapsActivity.this, R.drawable.satellite_map);
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(5,5,5,5);
+
+        standardMapButton.setLayoutParams(params);
+        satelliteMapButton.setLayoutParams(params);
+
+        standardMapButton.setBackground(standardIcon);
+        satelliteMapButton.setBackground(satelliteIcon);
     }
 }
