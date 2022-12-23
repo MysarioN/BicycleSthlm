@@ -5,7 +5,7 @@
   * Vyer / Filter (Cykelstråk)
   * Söka på ställen
   * Vägbeskrivning
-  * Min position
+  * ~~Min position~~
 * Citybikes API
 * Cykelpumpar API
 * Cykelparkering API
