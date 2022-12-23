@@ -31,6 +31,7 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
@@ -49,7 +50,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private ActivityMapsBinding binding;
     private boolean locationPermissionGranted;
     private FusedLocationProviderClient fusedLocationProviderClient;
-    private final LatLng defaultLocation = new LatLng(59.334591, 18.063240);
+    private final LatLng defaultLocation = new LatLng(59.334591, 18.063240); //Stockholm
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,6 +96,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
+        mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
 
         getDeviceLocation();
 
@@ -178,9 +180,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     public void showMapTypeDialog() {
+        String[] filterTypes = {"Citybikes", "Bicycle pumps", "Bicycle parking", "Bicycle traffic flow"};
+        boolean[] checked = {false, false, false, false};
+
         AlertDialog dialog = new AlertDialog.Builder(MapsActivity.this)
-                .setTitle("Results")
-                .setMessage("Map types:")
+                .setTitle("Filters")
                 .setPositiveButton("Standard", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
@@ -190,7 +194,32 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .setNeutralButton("Satellite", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
-                        mMap.setMapType(GoogleMap.MAP_TYPE_SATELLITE);
+                        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+                    }
+                })
+                .setMultiChoiceItems(filterTypes, checked, new DialogInterface.OnMultiChoiceClickListener(){
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i, boolean b) {
+                        if(b){
+                            switch (i){
+                                case 0:
+                                    //TODO add citybike filter
+                                    System.out.println("Added citybikes");
+                                    break;
+                                case 1:
+                                    //TODO add bicycle pump filter
+                                    System.out.println("Added bicycle pump");
+                                    break;
+                                case 2:
+                                    //TODO add bicycle parking filter
+                                    System.out.println("Added bicycle parking");
+                                    break;
+                                case 3:
+                                    //TODO add bicycle traffic flow filter
+                                    System.out.println("Added bicycle traffic flow");
+                                    break;
+                            }
+                        }
                     }
                 })
                 .setCancelable(true)
