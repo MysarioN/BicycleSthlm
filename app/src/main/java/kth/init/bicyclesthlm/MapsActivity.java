@@ -2,7 +2,10 @@ package kth.init.bicyclesthlm;
 
 import static android.content.ContentValues.TAG;
 
+import static kth.init.bicyclesthlm.BuildConfig.MAPS_API_KEY;
+
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -12,31 +15,50 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.ShapeDrawable;
 import android.location.Location;
 import android.location.LocationListener;
 import android.os.Bundle;
+import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 
+import com.google.android.gms.common.api.Status;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MapStyleOptions;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.TileOverlay;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.google.android.libraries.places.api.Places;
+import com.google.android.libraries.places.api.model.Place;
+import com.google.android.libraries.places.api.model.RectangularBounds;
+import com.google.android.libraries.places.widget.AutocompleteSupportFragment;
+import com.google.android.libraries.places.widget.listener.PlaceSelectionListener;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.snackbar.Snackbar;
+import com.google.android.material.snackbar.SnackbarContentLayout;
+
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Objects;
 
 import kth.init.bicyclesthlm.databinding.ActivityMapsBinding;
 
@@ -46,7 +68,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static final int REQUEST_ACCESS_LOCATION = 1000;
 
     private GoogleMap mMap;
-    Location mLastLocation;
+    private Location mLastLocation;
+    private Marker searchMarker;
     private ActivityMapsBinding binding;
     private boolean locationPermissionGranted;
     private FusedLocationProviderClient fusedLocationProviderClient;
@@ -62,8 +85,34 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
-        mapFragment.getMapAsync(this);
+        mapFragment.getMapAsync(MapsActivity.this);
 
+        Places.initialize(getApplicationContext(), MAPS_API_KEY);
+        AutocompleteSupportFragment autocompleteFragment = (AutocompleteSupportFragment)
+                getSupportFragmentManager().findFragmentById(R.id.autocomplete_fragment);
+        autocompleteFragment.setPlaceFields(Arrays.asList(Place.Field.NAME, Place.Field.ADDRESS, Place.Field.LAT_LNG));
+
+        autocompleteFragment.setCountry("SE");
+
+        autocompleteFragment.setLocationBias(RectangularBounds.newInstance(
+                new LatLng(59.229790, 18.206432),
+                new LatLng(59.427347, 17.733876)));
+
+        // Set up a PlaceSelectionListener to handle the response.
+        autocompleteFragment.setOnPlaceSelectedListener(new PlaceSelectionListener() {
+            @Override
+            public void onPlaceSelected(@NonNull Place place) {
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(place.getLatLng(), 11));
+                if(searchMarker != null)
+                    searchMarker.remove();
+                searchMarker = mMap.addMarker(new MarkerOptions().position(place.getLatLng()));
+            }
+
+            @Override
+            public void onError(@NonNull Status status) {
+                Log.i(TAG, "An error occurred: " + status);
+            }
+        });
 
         ImageButton button = findViewById(R.id.layers_button);
         button.setOnClickListener(new View.OnClickListener() {
@@ -72,7 +121,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 showMapTypeDialog();
             }
         });
-
     }
 
     @Override
@@ -94,8 +142,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+
+    @Override
     public void onMapReady(GoogleMap googleMap) {
-        mMap = googleMap;
+                mMap = googleMap;
         mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
 
         getDeviceLocation();
@@ -180,8 +233,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     public void showMapTypeDialog() {
-        String[] filterTypes = {"Citybikes", "Bicycle pumps", "Bicycle parking", "Bicycle traffic flow"};
-        boolean[] checked = {false, false, false, false};
+        String[] filterTypes = {"Bicycle paths", "Citybikes", "Bicycle pumps", "Bicycle parking", "Bicycle traffic flow"};
+        boolean[] checked = {false, false, false, false, false};
 
         AlertDialog dialog = new AlertDialog.Builder(MapsActivity.this)
                 .setTitle("Filters")
@@ -203,18 +256,21 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         if(b){
                             switch (i){
                                 case 0:
+                                    //TODO add bicycle paths layer
+                                    break;
+                                case 1:
                                     //TODO add citybike filter
                                     System.out.println("Added citybikes");
                                     break;
-                                case 1:
+                                case 2:
                                     //TODO add bicycle pump filter
                                     System.out.println("Added bicycle pump");
                                     break;
-                                case 2:
+                                case 3:
                                     //TODO add bicycle parking filter
                                     System.out.println("Added bicycle parking");
                                     break;
-                                case 3:
+                                case 4:
                                     //TODO add bicycle traffic flow filter
                                     System.out.println("Added bicycle traffic flow");
                                     break;
