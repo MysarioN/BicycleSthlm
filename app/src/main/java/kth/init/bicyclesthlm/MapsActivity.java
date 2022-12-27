@@ -14,37 +14,27 @@ import androidx.fragment.app.FragmentActivity;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
-import android.app.Dialog;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.ShapeDrawable;
 import android.location.Location;
-import android.location.LocationListener;
 import android.os.Bundle;
-import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
-import android.widget.Toast;
 
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.maps.model.TileOverlay;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.libraries.places.api.Places;
@@ -52,14 +42,10 @@ import com.google.android.libraries.places.api.model.Place;
 import com.google.android.libraries.places.api.model.RectangularBounds;
 import com.google.android.libraries.places.widget.AutocompleteSupportFragment;
 import com.google.android.libraries.places.widget.listener.PlaceSelectionListener;
-import com.google.android.material.button.MaterialButton;
-import com.google.android.material.snackbar.Snackbar;
-import com.google.android.material.snackbar.SnackbarContentLayout;
 
 import java.util.Arrays;
-import java.util.Map;
-import java.util.Objects;
 
+import kth.init.bicyclesthlm.Model.FiltersDialogModel;
 import kth.init.bicyclesthlm.databinding.ActivityMapsBinding;
 
 //Parts of this class is taken from developer.google.com
@@ -73,6 +59,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private ActivityMapsBinding binding;
     private boolean locationPermissionGranted;
     private FusedLocationProviderClient fusedLocationProviderClient;
+    private FiltersDialogModel filtersDialogModel;
+
     private final LatLng defaultLocation = new LatLng(59.334591, 18.063240); //Stockholm
 
     @Override
@@ -81,6 +69,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         binding = ActivityMapsBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
+        filtersDialogModel = new FiltersDialogModel();
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -130,7 +120,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     private void initPerms() {
-
         if (ContextCompat.checkSelfPermission(this,
                 Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -147,16 +136,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     @Override
-    public void onMapReady(GoogleMap googleMap) {
-                mMap = googleMap;
+    public void onMapReady(@NonNull GoogleMap googleMap) {
+        mMap = googleMap;
         mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
 
         getDeviceLocation();
 
         if (mLastLocation != null)
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()), 5));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()), 11));
         else
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 5));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 8));
     }
 
     @Override
@@ -234,7 +223,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     public void showMapTypeDialog() {
         String[] filterTypes = {"Bicycle paths", "Citybikes", "Bicycle pumps", "Bicycle parking", "Bicycle traffic flow"};
-        boolean[] checked = {false, false, false, false, false};
 
         AlertDialog dialog = new AlertDialog.Builder(MapsActivity.this)
                 .setTitle("Filters")
@@ -250,29 +238,63 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
                     }
                 })
-                .setMultiChoiceItems(filterTypes, checked, new DialogInterface.OnMultiChoiceClickListener(){
+                .setMultiChoiceItems(filterTypes, filtersDialogModel.isAllChecked(), new DialogInterface.OnMultiChoiceClickListener(){
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i, boolean b) {
                         if(b){
                             switch (i){
                                 case 0:
+                                    filtersDialogModel.setBicyclePaths(true);
                                     //TODO add bicycle paths layer
+                                    System.out.println("Added bicycle paths");
                                     break;
                                 case 1:
+                                    filtersDialogModel.setCityBikes(true);
                                     //TODO add citybike filter
                                     System.out.println("Added citybikes");
                                     break;
                                 case 2:
+                                    filtersDialogModel.setBicyclePumps(true);
                                     //TODO add bicycle pump filter
                                     System.out.println("Added bicycle pump");
                                     break;
                                 case 3:
+                                    filtersDialogModel.setBicycleParking(true);
                                     //TODO add bicycle parking filter
                                     System.out.println("Added bicycle parking");
                                     break;
                                 case 4:
+                                    filtersDialogModel.setBicycleTrafficFlow(true);
                                     //TODO add bicycle traffic flow filter
                                     System.out.println("Added bicycle traffic flow");
+                                    break;
+                            }
+                        } else {
+                            switch (i){
+                                case 0:
+                                    filtersDialogModel.setBicyclePaths(false);
+                                    //TODO remove bicycle paths layer
+                                    System.out.println("Removed bicycle paths");
+                                    break;
+                                case 1:
+                                    filtersDialogModel.setCityBikes(false);
+                                    //TODO remove citybike filter
+                                    System.out.println("Removed citybikes");
+                                    break;
+                                case 2:
+                                    filtersDialogModel.setBicyclePumps(false);
+                                    //TODO remove bicycle pump filter
+                                    System.out.println("Removed bicycle pump");
+                                    break;
+                                case 3:
+                                    filtersDialogModel.setBicycleParking(false);
+                                    //TODO remove bicycle parking filter
+                                    System.out.println("Removed bicycle parking");
+                                    break;
+                                case 4:
+                                    filtersDialogModel.setBicycleTrafficFlow(false);
+                                    //TODO remove bicycle traffic flow filter
+                                    System.out.println("Removed bicycle traffic flow");
                                     break;
                             }
                         }
