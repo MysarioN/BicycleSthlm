@@ -2,7 +2,7 @@
 
 * API nycklar
 * Google Maps API
-  * Vyer / Filter (Cykelstråk)
+  * ~~Vyer / Filter~~ (Cykelstråk) Google Maps API stödjer ej cykelstråk på android än
   * ~~Söka på ställen~~
   * ~~Vägbeskrivning~~
   * ~~Min position~~
