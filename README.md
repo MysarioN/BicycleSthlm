@@ -6,7 +6,7 @@
   * ~~Söka på ställen~~
   * ~~Vägbeskrivning~~
   * ~~Min position~~
-* Cykelstråk (Google Maps Andriod API stödjer ej cykelstråk på android än)
+* Cykelstråk API (Google Maps Andriod API stödjer ej cykelstråk på android än)
 * Citybikes API
 * ~~Cykelpumpar API~~
 * Cykelparkering API
