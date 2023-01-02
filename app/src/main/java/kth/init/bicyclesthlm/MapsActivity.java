@@ -13,13 +13,19 @@ import androidx.fragment.app.FragmentActivity;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -32,6 +38,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -43,12 +50,18 @@ import com.google.android.libraries.places.api.model.RectangularBounds;
 import com.google.android.libraries.places.widget.AutocompleteSupportFragment;
 import com.google.android.libraries.places.widget.listener.PlaceSelectionListener;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 
-import kth.init.bicyclesthlm.Model.FiltersDialogModel;
+import kth.init.bicyclesthlm.data.Networking;
+import kth.init.bicyclesthlm.model.BicyclePumpCollection;
+import kth.init.bicyclesthlm.model.FiltersDialogModel;
 import kth.init.bicyclesthlm.databinding.ActivityMapsBinding;
 
-//Parts of this class is taken from developer.google.com
+//TODO Add filters,
+// add functionality to reapply filters after reopened app (use sharedpreferences on onstart/onstop)
+
+//Parts of this activity is taken from developer.google.com
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
 
     private static final int REQUEST_ACCESS_LOCATION = 1000;
@@ -60,10 +73,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private boolean locationPermissionGranted;
     private FusedLocationProviderClient fusedLocationProviderClient;
     private FiltersDialogModel filtersDialogModel;
+    private BicyclePumpCollection bicyclePumpCollection;
+    private Networking network;
+
+    private ArrayList<Marker> bicyclePumpMarkers;
 
     private final LatLng defaultLocation = new LatLng(59.334591, 18.063240); //Stockholm
 
-    //Test
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -72,6 +88,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         setContentView(binding.getRoot());
 
         filtersDialogModel = new FiltersDialogModel();
+        bicyclePumpCollection = new BicyclePumpCollection(this, this);
+        network = new Networking(this);
+
+        bicyclePumpMarkers = new ArrayList<>();
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -89,12 +109,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 new LatLng(59.229790, 18.206432),
                 new LatLng(59.427347, 17.733876)));
 
-        // Set up a PlaceSelectionListener to handle the response.
+        // Set up a PlaceSelectionListener to handle search response.
         autocompleteFragment.setOnPlaceSelectedListener(new PlaceSelectionListener() {
             @Override
             public void onPlaceSelected(@NonNull Place place) {
                 mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(place.getLatLng(), 11));
-                if(searchMarker != null)
+                if (searchMarker != null)
                     searchMarker.remove();
                 searchMarker = mMap.addMarker(new MarkerOptions().position(place.getLatLng()));
             }
@@ -105,21 +125,71 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             }
         });
 
-        ImageButton button = findViewById(R.id.layers_button);
-        button.setOnClickListener(new View.OnClickListener() {
+        //Filter button listener
+        ImageButton filterButton = findViewById(R.id.layers_button);
+        filterButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                showMapTypeDialog();
+                showMapTypeDialog(mapFragment.getActivity());
             }
         });
     }
 
+    //Gets saved state of filters
     @Override
     protected void onStart() {
         super.onStart();
+
+        SharedPreferences preferences = getSharedPreferences("filterState", MODE_PRIVATE);
+
+        filtersDialogModel.setBicyclePaths(preferences.getBoolean("bicyclePaths", false));
+        filtersDialogModel.setCityBikes(preferences.getBoolean("cityBikes", false));
+        filtersDialogModel.setBicyclePumps(preferences.getBoolean("bicyclePumps", false));
+        filtersDialogModel.setBicycleParking(preferences.getBoolean("bicycleParking", false));
+        filtersDialogModel.setBicycleTrafficFlow(preferences.getBoolean("bicycleTrafficFlow", false));
+        filtersDialogModel.setStandardMap(preferences.getBoolean("standardMap", true));
+        filtersDialogModel.setSatelliteMap(preferences.getBoolean("satellite", false));
+
         initPerms();
     }
 
+    //After onStarts checks which filters are active and adds those to map
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (filtersDialogModel.isBicyclePumps()) {
+            network.getBicyclePumps(); //GET requests
+
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    addBicyclePumpMarkers();
+                }
+            }, 1500); //Delay because previous GET request has to be finished
+        }
+    }
+
+    //Saves states of filters
+    @Override
+    protected void onStop() {
+        super.onStop();
+
+        SharedPreferences preferences = getSharedPreferences("filterState", MODE_PRIVATE);
+        SharedPreferences.Editor editor = preferences.edit();
+
+        editor.putBoolean("bicyclePaths", filtersDialogModel.isBicyclePaths());
+        editor.putBoolean("cityBikes", filtersDialogModel.isCityBikes());
+        editor.putBoolean("bicyclePumps", filtersDialogModel.isBicyclePumps());
+        editor.putBoolean("bicycleParking", filtersDialogModel.isBicycleParking());
+        editor.putBoolean("bicycleTrafficFlow", filtersDialogModel.isBicycleTrafficFlow());
+        editor.putBoolean("standardMap", filtersDialogModel.isStandardMap());
+        editor.putBoolean("satellite", filtersDialogModel.isSatelliteMap());
+
+        editor.apply();
+    }
+
+    //Asks user for location permissions
     private void initPerms() {
         if (ContextCompat.checkSelfPermission(this,
                 Manifest.permission.ACCESS_FINE_LOCATION)
@@ -136,10 +206,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         super.onActivityResult(requestCode, resultCode, data);
     }
 
+    //Runs when map has loaded
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
-        mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+
+        //Checks saved state
+        if (filtersDialogModel.isStandardMap())
+            mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+        else
+            mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
 
         getDeviceLocation();
 
@@ -147,8 +223,18 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude()), 11));
         else
             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLocation, 8));
+
+        //If user already has granted location permission on re-open app
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+
+            locationPermissionGranted = true;
+            updateLocationUI();
+        }
     }
 
+    //When user grants location permission
     @Override
     public void onRequestPermissionsResult(
             int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -167,7 +253,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         updateLocationUI();
     }
 
-    @SuppressLint("MissingPermission")
+    //Enables or disables user location and find-my-location button
+    @SuppressLint("MissingPermission") //No, it does not have missing permissions...
     private void updateLocationUI() {
         if (mMap == null) {
             return;
@@ -222,7 +309,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    public void showMapTypeDialog() {
+    //Opens filters dialog
+    public void showMapTypeDialog(Activity activity) {
         String[] filterTypes = {"Bicycle paths", "Citybikes", "Bicycle pumps", "Bicycle parking", "Bicycle traffic flow"};
 
         AlertDialog dialog = new AlertDialog.Builder(MapsActivity.this)
@@ -230,20 +318,24 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .setPositiveButton("Standard", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
+                        filtersDialogModel.setSatelliteMap(false);
+                        filtersDialogModel.setStandardMap(true);
                         mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
                     }
                 })
                 .setNeutralButton("Satellite", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
+                        filtersDialogModel.setSatelliteMap(true);
+                        filtersDialogModel.setStandardMap(false);
                         mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
                     }
                 })
-                .setMultiChoiceItems(filterTypes, filtersDialogModel.isAllChecked(), new DialogInterface.OnMultiChoiceClickListener(){
+                .setMultiChoiceItems(filterTypes, filtersDialogModel.isAllChecked(), new DialogInterface.OnMultiChoiceClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i, boolean b) {
-                        if(b){
-                            switch (i){
+                        if (b) {
+                            switch (i) {
                                 case 0:
                                     filtersDialogModel.setBicyclePaths(true);
                                     //TODO add bicycle paths layer
@@ -256,8 +348,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                     break;
                                 case 2:
                                     filtersDialogModel.setBicyclePumps(true);
-                                    //TODO add bicycle pump filter
-                                    System.out.println("Added bicycle pump");
+                                    network.getBicyclePumps();
                                     break;
                                 case 3:
                                     filtersDialogModel.setBicycleParking(true);
@@ -271,7 +362,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                     break;
                             }
                         } else {
-                            switch (i){
+                            switch (i) {
                                 case 0:
                                     filtersDialogModel.setBicyclePaths(false);
                                     //TODO remove bicycle paths layer
@@ -284,8 +375,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                     break;
                                 case 2:
                                     filtersDialogModel.setBicyclePumps(false);
-                                    //TODO remove bicycle pump filter
-                                    System.out.println("Removed bicycle pump");
+
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                        bicyclePumpMarkers.forEach(Marker::remove);
+                                        bicyclePumpMarkers.clear();
+                                    }
                                     break;
                                 case 3:
                                     filtersDialogModel.setBicycleParking(false);
@@ -298,6 +392,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                     System.out.println("Removed bicycle traffic flow");
                                     break;
                             }
+                        }
+                    }
+                })
+                .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                    @Override
+                    public void onDismiss(DialogInterface dialogInterface) {
+
+                        if (filtersDialogModel.isBicyclePumps()) {
+                            addBicyclePumpMarkers();
                         }
                     }
                 })
@@ -314,12 +417,30 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         );
-        params.setMargins(5,5,5,5);
+        params.setMargins(5, 5, 5, 5);
 
         standardMapButton.setLayoutParams(params);
         satelliteMapButton.setLayoutParams(params);
 
         standardMapButton.setBackground(standardIcon);
         satelliteMapButton.setBackground(satelliteIcon);
+    }
+
+    /*
+    Creates markers from bicyclepumps latlngs
+    then adds them to an ArrayList of Marker
+    this allows us to later remove only those specified markers
+    */
+    private void addBicyclePumpMarkers() {
+        Bitmap b = BitmapFactory.decodeResource(getResources(), R.drawable.pump);
+        Bitmap smallPumpIcon = Bitmap.createScaledBitmap(b, 43, 65, false);
+
+        for (int i = 0; i < bicyclePumpCollection.getLatLngs().size(); i++) {
+            Marker pumpMarker = mMap.addMarker(new MarkerOptions()
+                    .position(bicyclePumpCollection.getLatLngs().get(i))
+                    .icon(BitmapDescriptorFactory.fromBitmap(smallPumpIcon)).flat(false));
+
+            bicyclePumpMarkers.add(pumpMarker);
+        }
     }
 }

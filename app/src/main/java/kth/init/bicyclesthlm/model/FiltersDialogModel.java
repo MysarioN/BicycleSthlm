@@ -1,4 +1,4 @@
-package kth.init.bicyclesthlm.Model;
+package kth.init.bicyclesthlm.model;
 
 public class FiltersDialogModel {
 
@@ -7,6 +7,8 @@ public class FiltersDialogModel {
     private boolean bicyclePumps;
     private boolean bicycleParking;
     private boolean bicycleTrafficFlow;
+    private boolean standardMap;
+    private boolean satelliteMap;
 
     public FiltersDialogModel() {
         bicyclePaths = false;
@@ -14,6 +16,8 @@ public class FiltersDialogModel {
         bicyclePumps = false;
         bicycleParking = false;
         bicycleTrafficFlow = false;
+        standardMap = false;
+        satelliteMap = false;
     }
 
     public boolean isBicyclePaths() {
@@ -56,7 +60,23 @@ public class FiltersDialogModel {
         this.bicycleTrafficFlow = bicycleTrafficFlow;
     }
 
-    public boolean[] isAllChecked(){
+    public boolean isStandardMap() {
+        return standardMap;
+    }
+
+    public void setStandardMap(boolean standardMap) {
+        this.standardMap = standardMap;
+    }
+
+    public boolean isSatelliteMap() {
+        return satelliteMap;
+    }
+
+    public void setSatelliteMap(boolean satelliteMap) {
+        this.satelliteMap = satelliteMap;
+    }
+
+    public boolean[] isAllChecked() {
         return new boolean[]{bicyclePaths, cityBikes, bicyclePumps, bicycleParking, bicycleTrafficFlow};
     }
 }
