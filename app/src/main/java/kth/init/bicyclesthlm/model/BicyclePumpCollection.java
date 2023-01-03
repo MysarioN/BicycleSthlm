@@ -21,14 +21,16 @@ public class BicyclePumpCollection {
 
     private static Activity activity;
     private static RequestQueue queue;
-    private static ArrayList<BicyclePump> bicyclePumps;
-    private static ArrayList<LatLng> latLngs;
+    private ArrayList<BicyclePump> bicyclePumps;
+    private ArrayList<LatLng> latLngs;
+    private BicyclePumpCollection thisCollection;
 
     public BicyclePumpCollection(Context context, Activity activityIn) {
         latLngs = new ArrayList<>();
         bicyclePumps = new ArrayList<>();
         activity = activityIn;
         queue = Volley.newRequestQueue(context);
+        thisCollection = this;
     }
 
     public ArrayList<BicyclePump> getBicyclePumps() {
@@ -40,7 +42,7 @@ public class BicyclePumpCollection {
     }
 
     //Response listener for bicycle pumps
-    public static final Response.Listener<String> stringResponseListener = new Response.Listener<String>() {
+    public Response.Listener<String> stringResponseListener = new Response.Listener<String>() {
 
         @Override
         public void onResponse(String response) {
@@ -53,7 +55,7 @@ public class BicyclePumpCollection {
                 //Calls GET request to get latlng for each address
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     bicyclePumps.forEach(bicyclePump ->
-                            networking.getLatLngFromAddress(bicyclePump.getAddress()));
+                            networking.getLatLngFromAddress(bicyclePump.getAddress(), thisCollection));
                 }
 
                 queue.cancelAll(this);
@@ -64,7 +66,7 @@ public class BicyclePumpCollection {
     };
 
     //Response Listener for latlng of bicycle pump's addresses
-    public static final Response.Listener<JSONObject> JSONResponseListener = new Response.Listener<JSONObject>() {
+    public Response.Listener<JSONObject> JSONResponseListener = new Response.Listener<JSONObject>() {
 
         @Override
         public void onResponse(JSONObject responseArr) {
@@ -72,10 +74,12 @@ public class BicyclePumpCollection {
             try {
                 LatLng latLng = ParseJSON.getParsedLatLng(responseArr);
 
-                if (latLng != null)
+                if (latLng != null) {
                     latLngs.add(latLng);
-                else
+                }
+                else {
                     latLngs.add(new LatLng(-75.250973, -0.071389));
+                }
 
                 queue.cancelAll(this);
             } catch (Exception e) {
