@@ -1,9 +1,9 @@
 package kth.init.bicyclesthlm.model;
 
-public class BicyclePump {
+public class BicycleObject {
     private String address;
 
-    public BicyclePump(String address) {
+    public BicycleObject(String address) {
         this.address = address;
     }
 
@@ -13,8 +13,7 @@ public class BicyclePump {
 
     @Override
     public String toString() {
-        return "BicyclePump{" +
-                "address='" + address +
+        return "address='" + address +
                 '}';
     }
 }

@@ -6,8 +6,12 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+
+import kth.init.bicyclesthlm.model.TrafficFlowCollection;
+import kth.init.bicyclesthlm.model.TrafficFlowObject;
 
 public class ParseJSON {
 
@@ -31,5 +35,44 @@ public class ParseJSON {
         }
 
         return null;
+    }
+
+    //Takes JSON response from GET request and parses into an Arraylist containing strings with objectId
+    public static ArrayList<String> getParsedObjectId(JSONArray results) {
+        ArrayList<String> stringList = new ArrayList<>();
+        try {
+            if (results.length() > 0) {
+                JSONObject newObj = results.getJSONObject(0);
+                stringList.add( newObj.getString("ObjectId"));
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return stringList;
+    }
+
+    //Takes JSON response from GET request and parses Traffic flow objects
+    public static TrafficFlowObject getParsedTrafficInfo(JSONArray results) {
+
+        TrafficFlowObject trafficFlowObj = null;
+
+        try {
+            if (results.length() > 0) {
+                for(int i = 0; i < results.length(); i++) {
+                    JSONObject newObj = results.getJSONObject(i);
+
+                    String mean = newObj.getJSONArray("AttributeValues").getJSONObject(1).getString("Value");
+                    String street = newObj.getJSONArray("AttributeValues").getJSONObject(2).getString("Value");
+                    String flowEstimation = newObj.getJSONArray("AttributeValues").getJSONObject(3).getString("Value");
+
+                    if(mean != null || street != null || flowEstimation != null){
+                        trafficFlowObj = new TrafficFlowObject(mean, flowEstimation, street);
+                    }
+                }
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return trafficFlowObj;
     }
 }

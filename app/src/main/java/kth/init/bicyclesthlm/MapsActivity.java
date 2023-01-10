@@ -50,21 +50,18 @@ import com.google.android.libraries.places.api.model.RectangularBounds;
 import com.google.android.libraries.places.widget.AutocompleteSupportFragment;
 import com.google.android.libraries.places.widget.listener.PlaceSelectionListener;
 
+
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 
 import kth.init.bicyclesthlm.data.Networking;
-import kth.init.bicyclesthlm.model.BicyclePump;
-import kth.init.bicyclesthlm.model.BicyclePumpCollection;
+import kth.init.bicyclesthlm.model.BicycleCollection;
 import kth.init.bicyclesthlm.model.FiltersDialogModel;
 import kth.init.bicyclesthlm.databinding.ActivityMapsBinding;
-
-//TODO Add filters,
-// add functionality to reapply filters after reopened app (use sharedpreferences on onstart/onstop)
+import kth.init.bicyclesthlm.model.TrafficFlowCollection;
 
 //Parts of this activity is taken from developer.google.com
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnMarkerClickListener {
 
     private static final int REQUEST_ACCESS_LOCATION = 1000;
 
@@ -75,14 +72,18 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private boolean locationPermissionGranted;
     private FusedLocationProviderClient fusedLocationProviderClient;
     private FiltersDialogModel filtersDialogModel;
-    private BicyclePumpCollection bicyclePumpCollection;
-    private BicyclePumpCollection cityBikesCollection;
+    private BicycleCollection bicycleCollection;
+    private BicycleCollection cityBikesCollection;
+    private BicycleCollection bikeParkingCollection;
+    private TrafficFlowCollection trafficFlowCollection;
+
 
     private Networking network;
 
     private ArrayList<Marker> bicyclePumpMarkers;
     private ArrayList<Marker> cityBikesMarkers;
-
+    private ArrayList<Marker> bikeParkingMarkers;
+    private ArrayList<Marker> trafficFlowMarkers;
 
     private final LatLng defaultLocation = new LatLng(59.334591, 18.063240); //Stockholm
 
@@ -94,19 +95,23 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         setContentView(binding.getRoot());
 
         filtersDialogModel = new FiltersDialogModel();
-        bicyclePumpCollection = new BicyclePumpCollection(this, this);
-        cityBikesCollection = new BicyclePumpCollection(this, this);
+        bicycleCollection = new BicycleCollection(this, this);
+        cityBikesCollection = new BicycleCollection(this, this);
+        bikeParkingCollection = new BicycleCollection(this, this);
+        trafficFlowCollection = new TrafficFlowCollection(this,this);
+
         network = new Networking(this);
 
         bicyclePumpMarkers = new ArrayList<>();
         cityBikesMarkers = new ArrayList<>();
+        bikeParkingMarkers = new ArrayList<>();
+        trafficFlowMarkers = new ArrayList<>();
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(MapsActivity.this);
 
-        //TODO KOLLA HUR MAN FIXAR DETTA
         Places.initialize(getApplicationContext(), MAPS_API_KEY);
         AutocompleteSupportFragment autocompleteFragment = (AutocompleteSupportFragment)
                 getSupportFragmentManager().findFragmentById(R.id.autocomplete_fragment);
@@ -168,12 +173,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         super.onResume();
 
         if (filtersDialogModel.isBicyclePumps()) {
-            network.getBicyclePumps(bicyclePumpCollection); //GET requests
+            network.getBicyclePumps(bicycleCollection); //GET requests
 
             new Handler().postDelayed(new Runnable() {
                 @Override
                 public void run() {
-                    addBicyclePumpMarkers(bicyclePumpCollection, bicyclePumpMarkers, "pump");
+                    addBicyclePumpMarkers(bicycleCollection, bicyclePumpMarkers, "pump");
                 }
             }, 1500); //Delay because previous GET request has to be finished
         }
@@ -184,6 +189,27 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 @Override
                 public void run() {
                     addBicyclePumpMarkers(cityBikesCollection, cityBikesMarkers, "citybike");
+                }
+            }, 1500); //Delay because previous GET request has to be finished
+        }
+        if (filtersDialogModel.isBicycleParking()) {
+            network.getBikeParking(bikeParkingCollection); //GET requests
+
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    addBicyclePumpMarkers(bikeParkingCollection, bikeParkingMarkers, "bikeparking");
+                }
+            }, 1500); //Delay because previous GET request has to be finished
+        }
+        if (filtersDialogModel.isBicycleTrafficFlow()) {
+            if(trafficFlowCollection.getTrafficFlowObjectArrayList().size() < 20 || trafficFlowCollection.getTrafficFlowObjectArrayList().isEmpty())
+                network.getTraficFlowLinkIds(trafficFlowCollection); //GET requests
+
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    addTrafficFlowMarkers(trafficFlowCollection, trafficFlowMarkers, "trafficflow");
                 }
             }, 1500); //Delay because previous GET request has to be finished
         }
@@ -348,6 +374,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         filtersDialogModel.setSatelliteMap(true);
                         filtersDialogModel.setStandardMap(false);
                         mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+
                     }
                 })
                 .setMultiChoiceItems(filterTypes, filtersDialogModel.isAllChecked(), new DialogInterface.OnMultiChoiceClickListener() {
@@ -362,23 +389,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                     break;
                                 case 1:
                                     filtersDialogModel.setCityBikes(true);
-                                    //TODO add citybike filter
                                     network.getCityBikes(cityBikesCollection);
-                                    System.out.println("Added citybikes");
                                     break;
                                 case 2:
                                     filtersDialogModel.setBicyclePumps(true);
-                                    network.getBicyclePumps(bicyclePumpCollection);
+                                    network.getBicyclePumps(bicycleCollection);
                                     break;
                                 case 3:
                                     filtersDialogModel.setBicycleParking(true);
-                                    //TODO add bicycle parking filter
-                                    System.out.println("Added bicycle parking");
+                                    network.getBikeParking(bikeParkingCollection);
                                     break;
                                 case 4:
                                     filtersDialogModel.setBicycleTrafficFlow(true);
-                                    //TODO add bicycle traffic flow filter
-                                    System.out.println("Added bicycle traffic flow");
+                                    if(trafficFlowCollection.getTrafficFlowObjectArrayList().size() < 20 || trafficFlowCollection.getTrafficFlowObjectArrayList().isEmpty())
+                                        network.getTraficFlowLinkIds(trafficFlowCollection);
                                     break;
                             }
                         } else {
@@ -386,20 +410,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                 case 0:
                                     filtersDialogModel.setBicyclePaths(false);
                                     //TODO remove bicycle paths layer
-                                    System.out.println("PUMPARRRRRR ");
-                                    for (BicyclePump pump: bicyclePumpCollection.getBicyclePumps()) {
-                                        System.out.println("Pump: " + pump);
-                                    }
-
-                                    System.out.println("City BIKEESS ");
-                                    for (BicyclePump city: cityBikesCollection.getBicyclePumps()) {
-                                        System.out.println("Pump: " + city);
-                                    }
-                                    System.out.println("Removed bicycle paths");
                                     break;
                                 case 1:
                                     filtersDialogModel.setCityBikes(false);
-                                    //TODO remove citybike filter
+
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                                         cityBikesMarkers.forEach(Marker::remove);
                                         cityBikesMarkers.clear();
@@ -415,13 +429,19 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                     break;
                                 case 3:
                                     filtersDialogModel.setBicycleParking(false);
-                                    //TODO remove bicycle parking filter
-                                    System.out.println("Removed bicycle parking");
+
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                        bikeParkingMarkers.forEach(Marker::remove);
+                                        bikeParkingMarkers.clear();
+                                    }
                                     break;
                                 case 4:
                                     filtersDialogModel.setBicycleTrafficFlow(false);
-                                    //TODO remove bicycle traffic flow filter
-                                    System.out.println("Removed bicycle traffic flow");
+
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                        trafficFlowMarkers.forEach(Marker::remove);
+                                        trafficFlowMarkers.clear();
+                                    }
                                     break;
                             }
                         }
@@ -432,10 +452,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     public void onDismiss(DialogInterface dialogInterface) {
 
                         if (filtersDialogModel.isBicyclePumps()) {
-                            addBicyclePumpMarkers(bicyclePumpCollection, bicyclePumpMarkers, "pump");
+                            addBicyclePumpMarkers(bicycleCollection, bicyclePumpMarkers, "pump");
                         }
                         if (filtersDialogModel.isCityBikes()) {
                             addBicyclePumpMarkers(cityBikesCollection, cityBikesMarkers, "citybike");
+                        }
+                        if (filtersDialogModel.isBicycleParking()) {
+                            addBicyclePumpMarkers(bikeParkingCollection, bikeParkingMarkers, "bikeparking");
+                        }
+                        if (filtersDialogModel.isBicycleTrafficFlow()) {
+                            addTrafficFlowMarkers(trafficFlowCollection, trafficFlowMarkers, "trafficflow");
                         }
                     }
                 })
@@ -466,9 +492,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     then adds them to an ArrayList of Marker
     this allows us to later remove only those specified markers
     */
-    private void addBicyclePumpMarkers(BicyclePumpCollection collection, ArrayList<Marker> markers, String image) {
+    private void addBicyclePumpMarkers(BicycleCollection collection, ArrayList<Marker> markers, String image) {
         Bitmap b = BitmapFactory.decodeResource(getResources(), getImage(image));
-        Bitmap smallPumpIcon = Bitmap.createScaledBitmap(b, 43, 65, false);
+        Bitmap smallPumpIcon = Bitmap.createScaledBitmap(b, 30, 40, false);
 
         for (int i = 0; i < collection.getLatLngs().size(); i++) {
             Marker pumpMarker = mMap.addMarker(new MarkerOptions()
@@ -480,11 +506,40 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     /*
+    Creates markers from trafficFlow
+    then adds them to an ArrayList of Marker
+    this allows us to later remove only those specified markers
+    adds title, snippet and onclick
+    */
+    private void addTrafficFlowMarkers(TrafficFlowCollection collection, ArrayList<Marker> markers, String image) {
+        Bitmap b = BitmapFactory.decodeResource(getResources(), getImage(image));
+        Bitmap smallPumpIcon = Bitmap.createScaledBitmap(b, 30, 40, false);
+
+        for (int i = 0; i < collection.getTrafficFlowObjectArrayList().size(); i++) {
+            Marker pumpMarker = mMap.addMarker(new MarkerOptions()
+                    .position(collection.getTrafficFlowObjectArrayList().get(i).getLatLng())
+                    .icon(BitmapDescriptorFactory.fromBitmap(smallPumpIcon)).flat(false));
+
+            pumpMarker.setTag(0);
+            pumpMarker.setTitle("Dagligt medelvärde: " + collection.getTrafficFlowObjectArrayList().get(i).getMeanValue());
+            pumpMarker.setSnippet("Mätmetod: " + collection.getTrafficFlowObjectArrayList().get(i).getFlowEstimation());
+            markers.add(pumpMarker);
+
+            mMap.setOnMarkerClickListener(this);
+        }
+    }
+
+    @Override
+    /** Called when the user clicks a marker. */
+    public boolean onMarkerClick(final Marker marker) {
+        return false;
+    }
+
+    /*
         Gets the marker image
      */
     private int getImage(String imageName){
-        //TODO Sätt detta till något annat som standard?
-        int imagenumb = R.drawable.pump;
+        int imagenumb = R.drawable.info;
 
         switch (imageName){
             case "pump":
@@ -493,8 +548,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             case "citybike":
                 imagenumb = R.drawable.citybike;
                 break;
+            case "bikeparking":
+                imagenumb = R.drawable.bikeparking;
+                break;
+            case "trafficflow":
+                imagenumb = R.drawable.info;
+                break;
         }
-
         return imagenumb;
     }
 

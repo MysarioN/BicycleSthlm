@@ -17,24 +17,24 @@ import kth.init.bicyclesthlm.data.Networking;
 import kth.init.bicyclesthlm.data.ParseJSON;
 import kth.init.bicyclesthlm.data.ParseString;
 
-public class BicyclePumpCollection {
+public class BicycleCollection {
 
     private static Activity activity;
     private static RequestQueue queue;
-    private ArrayList<BicyclePump> bicyclePumps;
+    private ArrayList<BicycleObject> bicycleObjects;
     private ArrayList<LatLng> latLngs;
-    private BicyclePumpCollection thisCollection;
+    private BicycleCollection thisCollection;
 
-    public BicyclePumpCollection(Context context, Activity activityIn) {
+    public BicycleCollection(Context context, Activity activityIn) {
         latLngs = new ArrayList<>();
-        bicyclePumps = new ArrayList<>();
+        bicycleObjects = new ArrayList<>();
         activity = activityIn;
         queue = Volley.newRequestQueue(context);
         thisCollection = this;
     }
 
-    public ArrayList<BicyclePump> getBicyclePumps() {
-        return bicyclePumps;
+    public ArrayList<BicycleObject> getBicyclePumps() {
+        return bicycleObjects;
     }
 
     public ArrayList<LatLng> getLatLngs() {
@@ -48,14 +48,14 @@ public class BicyclePumpCollection {
         public void onResponse(String response) {
 
             try {
-                bicyclePumps = ParseString.getParsedBicyclePumpList(response);
+                bicycleObjects = ParseString.getParsedBicyclePumpList(response);
 
                 Networking networking = new Networking(activity);
 
                 //Calls GET request to get latlng for each address
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    bicyclePumps.forEach(bicyclePump ->
-                            networking.getLatLngFromAddress(bicyclePump.getAddress(), thisCollection));
+                    bicycleObjects.forEach(bicycleObject ->
+                            networking.getLatLngFromAddress(bicycleObject.getAddress(), thisCollection));
                 }
 
                 queue.cancelAll(this);
